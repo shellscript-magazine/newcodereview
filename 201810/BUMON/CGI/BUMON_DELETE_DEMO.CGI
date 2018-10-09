@@ -142,7 +142,7 @@ ERROR_CHECK
 # HTML加工
 cat ${htmd}/BUMON_DEMO_DELETE.HTML                    |
 # ###DATE###を変換
-calsed "###DATE###" ${today}                          |
+calsed "###DATE###" ${today} -                        |
 # 文字をはめ込む
 mojihame -l###BUMON_MST### - ${tmp}-bumon_data_sansho > ${tmp}-html
 ERROR_CHECK
