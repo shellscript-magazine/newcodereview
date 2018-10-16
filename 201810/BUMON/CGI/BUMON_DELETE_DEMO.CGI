@@ -128,11 +128,11 @@ up3 key=1 ${tmp}-del_bumon |
 delr 1 _                   |
 # LV3データ更新用に保存 
 tee ${tmp}-bumon_data      |
-# 部門コード、適用日、登録日時でソート
-msort key=1@4@7            |
 # 現在適用中のレコードを抽出
 awk '$4<="'${today}'"'     |
 awk '$5>="'${today}'"'     |
+# 部門コード、適用開始日、登録日時でソート
+msort key=1@4@7            |
 # 重複を削除
 getlast 1 1                |
 # 適用フラグで判断
