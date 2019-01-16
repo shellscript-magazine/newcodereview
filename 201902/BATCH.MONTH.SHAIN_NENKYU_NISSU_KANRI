@@ -1,0 +1,361 @@
+#!/bin/bash -vx
+#
+# BATCH.MONTH.SHAIN_NENKYU_NISSU_KANRI : 毎月の社員年休日数管理
+#
+# 引数で渡された処理月の次月開始時点の年休日数を計算する
+#
+# Usage : BATCH.MONTH.SHAIN_NENKYU_NISSU_KANRI <処理月 yyyymm>
+#
+# Written by Hiroaki Kukita (h-kukita@******) : 2018/12/19
+
+# 走行ログ
+home=/home/usp/KOJIN/kukita/MAGAZINE/NENKYU_KANRI
+logd=$home/LOG
+logfile=$logd/LOG.$(basename $0).$(date +%Y%m%d_%H%M%S)
+exec 2> $logfile
+
+# 変数の定義
+export LANG=ja_JP.UTF-8
+export PATH=/home/UTL:/home/TOOL:$PATH
+tmp=/tmp/tmp_$(basename $0)_$$
+today=$(date +%Y%m%d)
+todayhms=$(date +%Y%m%d%H%M%S)
+
+# ディレクトリの定義
+semd=$home/SEMAPHORE
+sesd=$home/SESSION
+lv1d=$home/LV1
+lv2d=$home/LV2
+lv3d=$home/LV3
+tbld=$home/LV3/TBL
+
+# エラーチェックとエラー終了処理の定義
+ERROR_CHECK(){
+    [ $(plus ${PIPESTATUS[@]}) -eq 0 ] && return
+    message=$1
+    echo "Error[$(basename $0)] : $message" 1>&2
+    echo "$HOSTNAME $(basename $0) ERROR $(date +%Y%m%d_%H%M%S)" >> $logd/UPCNT
+    touch $semd/$(basename $0).$HOSTNAME.ERROR.$today
+    exit 1
+}
+
+# 起動処理
+echo "$HOSTNAME $(basename $0) START $(date +%Y%m%d_%H%M%S)" >> $logd/UPCNT
+touch $semd/$(basename $0).$HOSTNAME.START.$today
+
+# 引数チェック
+if [ "$#" -ne 1 ]; then
+    false ; ERROR_CHECK "parameter error"
+fi
+
+# 処理月
+dyyyymm=$1
+
+# 年間休日数
+nenkan_kyujitsu_nissu=114
+# 全労働日
+nenkan_rodo_nissu=$((365 - $nenkan_kyujitsu_nissu))
+# 全労働日8割
+nenkan_rodo_nissu_8wari=$(lcalc -d 'sage('$nenkan_rodo_nissu' * 0.8, 0)')
+
+#---------------------------------------------------
+# 毎月の年休消化日数、年休残日数
+#---------------------------------------------------
+# 年休消化日数の取得
+cat $lv3d/SHAIN_KINTAI_FILE/SHAIN_KINTAI_FILE  |
+#  1:社員コード 2:年月       3:出勤日数 4:欠勤日数 5:年休日数
+#  6:休職日数   7:更新フラグ 8:更新日時 9:更新ID 10:更新者
+selr 2 $dyyyymm                                |
+self 1 5                                       > $tmp-nenkyu_shoka_nissu
+#  1:社員コード 2:年休消化日数
+ERROR_CHECK
+
+#---------------------------------------------------
+#「年休消化日数」「年休残日数」の計算
+#---------------------------------------------------
+# 社員年休マスター
+cat $lv3d/SHAIN_NENKYU_MASTER/SHAIN_NENKYU_MASTER  |
+#  1:社員コード   2:年休入社日付     3:年休マスター区分 4:消滅日数   5:繰越日数
+#  6:当年発生日数 7:当年年休消化日数 8:当年年休残日数   9:更新フラグ 10:更新日時
+#  11:更新ID    12:更新者
+#「年休日数」の連結
+join2 +0 key=1 $tmp-nenkyu_shoka_nissu             |
+#  1:社員コード 2:年休消化日数 3:年休入社日付     4:年休マスター区分 5:消滅日数
+#  6:繰越日数   7:当年発生日数 8:当年年休消化日数 9:当年年休残日数   10:更新フラグ
+#  11:更新日時  12:更新ID    13:更新者
+#「年休消化日数」「年休残日数」を計算
+lcalc '$0, $7+$2, $8-$2'                           |
+#  1:社員コード 2:年休消化日数 3:年休入社日付     4:年休マスター区分    5:消滅日数
+#  6:繰越日数   7:当年発生日数 8:当年年休消化日数 9:当年年休残日数      10:更新フラグ
+#  11:更新日時  12:更新ID    13:更新者          14:新当年年休消化日数 15:新当年年休残日数
+# 必要項目を取得
+self 1 3 4 5 6 14 15                               > $tmp-shain_nenkyu_master_nenkyu_shoka
+# 1:社員コード         2:年休マスター区分 3:消滅日数 4:繰越日数 5:当年発生日数
+# 6:新当年年休消化日数 7:新当年年休残日数
+ERROR_CHECK
+
+#---------------------------------------------------
+# 年休発生の処理
+#---------------------------------------------------
+# 次月
+next_dyyyymm=$(mdate ${dyyyymm}m/+1)
+# 次月範囲 (1日 - 末日)
+next_month_from=${next_dyyyymm}01
+next_month_to=$(mdate -d ${next_dyyyymm}m | self NF)
+# mmddの取得
+target_mmdd_from=$(self -d 1.5.4 $next_month_from)
+target_mmdd_to=$(self -d 1.5.4 $next_month_to)
+
+# 年休入社日付の6か月後を計算して、年休発生対象者を取得
+# 存在しない日付の場合は、丸める
+# ex) 2018/08/30 -> 2019/02/30 -> 2019/02/28
+cat $lv3d/SHAIN_NENKYU_MASTER/SHAIN_NENKYU_MASTER  |
+#  1:社員コード   2:年休入社日付     3:年休マスター区分 4:消滅日数   5:繰越日数
+#  6:当年発生日数 7:当年年休消化日数 8:当年年休残日数   9:更新フラグ 10:更新日時
+#  11:更新ID    12:更新者
+self 1 2 2.1.6 2.7.2                               |
+#  1:社員コード 2:入社日付 3:入社月(yyyymm) 4:入社日(dd)
+mdate -f 3m/+6                                     |
+#  1:社員コード 2:入社日付 3:入社月(yyyymm) 4:入社月+6か月 5:入社日(dd)
+mdate -f -d 4m                                     |
+#  1:社員コード 2:入社日付 3:入社月(yyyymm) 4:入社月+6か月
+#  5～NF-1:入社月+6か月の年月日(yyyymmdd) NF:入社日(dd)
+self 1/4 NF-1.7.2 NF                               |
+#  1:社員コード 2:入社日付 3:入社月(yyyymm) 4:入社月+6か月
+#  5:入社月+6か月最終日(dd) 6:入社日(dd)
+# 存在しない日付の場合、丸める
+uawk '{if($5<$6){print $0, $4$5}
+else     {print $0, $4$6}}'                 |
+#  1:社員コード 2:入社日付 3:入社月(yyyymm) 4:入社月+6か月
+#  5:入社月+6か月最終日(dd) 6:入社日(dd) 7:入社日+6か月(丸め)
+self 1 7 7.5.4                                     |
+#  1:社員コード 2:入社日+6か月(丸め) 3:入社日+6か月(mmdd)
+# 年休発生対象月の範囲
+# TODO:今回は(1日-末日)なので考慮しなくてよいが
+#      15日締の場合などは年またぎの場合にmmddの大小が逆転するので注意が必要
+#      ex) 1216 - 0115 となる
+uawk '$3>="'$target_mmdd_from'"'                   |
+uawk '$3<="'$target_mmdd_to'"'                     |
+self 1                                             > $tmp-target_shain
+#  1:社員コード
+ERROR_CHECK
+
+#-------------------------------------------------------------
+# 現在月を含めて過去1年分の出勤日数、年休日数、休職日数を取得
+#-------------------------------------------------------------
+# 過去1年分の年月(yyyymm)をリスト化
+mdate -e ${dyyyymm}m/-11  |
+tarr                      > $tmp-target_yyyymm
+#  1:年月(yyyymm)
+ERROR_CHECK
+
+# 社員勤怠ファイルを取得
+cat $lv3d/SHAIN_KINTAI_FILE/SHAIN_KINTAI_FILE  |
+#  1:社員コード 2:年月       3:出勤日数 4:欠勤日数 5:年休日数
+#  6:休職日数   7:更新フラグ 8:更新日時 9:更新ID 10:更新者
+# 対象社員を取得
+join0 key=1 $tmp-target_shain                  |
+# 対象年月を取得
+cjoin0 key=2 $tmp-target_yyyymm                |
+self 1 3 5 6                                   |
+#  1:社員コード 2:出勤日数 3:年休日数 4:休職日数
+sm2 key=1 val=2/4                              |
+#「年休日数」「休職日数」は「出勤」扱いなので加算する
+lcalc '$0, $2+$3+$4'                           |
+#  1:社員コード 2:出勤日数 3:年休日数 4:休職日数 5:出勤日数計
+self 1 5                                       |
+#  1:社員コード 2:出勤日数
+itouch "_ _" -                                 > $tmp-shukkin_nissu
+ERROR_CHECK
+
+# 年休マスター区分「1:通常」「2:短時間」で社員を分ける
+cat $lv3d/SHAIN_NENKYU_MASTER/SHAIN_NENKYU_MASTER  |
+#  1:社員コード   2:年休入社日付     3:年休マスター区分 4:消滅日数   5:繰越日数
+#  6:当年発生日数 7:当年年休消化日数 8:当年年休残日数   9:更新フラグ 10:更新日時
+#  11:更新ID    12:更新者
+self 1 3                                           |
+#  1:社員コード 2:年休マスター区分
+sorter -d $tmp-target_nenkyu_master_kbn_%2
+#  1:社員コード
+ERROR_CHECK
+
+# 初期ファイル作成
+touch $tmp-target_nenkyu_master_kbn_1
+ERROR_CHECK
+touch $tmp-target_nenkyu_master_kbn_2
+ERROR_CHECK
+
+# 年休マスター（通常）
+cat $lv3d/NENKYU_MASTER_TSUJO/NENKYU_MASTER_TSUJO  |
+#  1:勤続年数 2:付与日数 3:更新フラグ 4:更新日時 5:更新ID
+#  6:更新者
+self 1 2                                           > $tmp-nenkyu_master_tsujo
+#  1:勤続年数 2:付与日数
+ERROR_CHECK
+
+# 年休マスター（短時間）
+cat $lv3d/NENKYU_MASTER_TANJIKAN/NENKYU_MASTER_TANJIKAN  |
+#  1:勤続年数   2:週所定労働日数 3:年所定労働日数下限 4:年所定労働日数上限 5:付与日数
+#  6:更新フラグ 7:更新日時       8:更新ID           9:更新者
+self 1 3 4 5                                             > $tmp-nenkyu_master_tanjikan
+#  1:勤続年数 2:年所定労働日数下限 3:年所定労働日数上限 4:付与日数
+ERROR_CHECK
+
+# 勤続年数を求める
+# TODO:今回は(1日-末日)なので考慮しなくてよいが
+#      15日締の場合などは入社暦月ではなく入社締月を使用しなければならない
+#      ex) 入社日   2010/01/16
+#          入社暦月 2010/01
+#          入社締月 2010/02
+cat $lv3d/SHAIN_NENKYU_MASTER/SHAIN_NENKYU_MASTER  |
+#  1:社員コード   2:年休入社日付     3:年休マスター区分 4:消滅日数   5:繰越日数
+#  6:当年発生日数 7:当年年休消化日数 8:当年年休残日数   9:更新フラグ 10:更新日時
+#  11:更新ID    12:更新者
+# 年休発生対象社員を取得
+join0 key=1 $tmp-target_shain                      |
+self 1 2                                           |
+#  1:社員コード 2:入社日付
+strcat 0 \"$next_dyyyymm\"                         |
+#  1:社員コード 2:入社日付 3:次月
+self 0 2.1.6                                       |
+#  1:社員コード 2:入社日付 3:次月 4:入社年月
+# 年月の差(=勤務月数)を取得
+mdate -f 3m 4m                                     |
+#  1:社員コード 2:入社日付 3:次月 4:入社年月 5:勤務月数
+# 勤務年数を取得
+lcalc '$0, $5/12'                                  |
+#  1:社員コード 2:入社日付 3:次月 4:入社年月 5:勤務月数
+#  6:勤続年数
+# 出勤日数を連結
+join2 +0 key=1 $tmp-shukkin_nissu                  |
+#  1:社員コード 2:出勤日数 3:入社日付 4:次月 5:入社年月
+#  6:勤務月数   7:勤続年数
+# 勤続年数が1年半以上、未満で処理を分けるための中間ファイル
+tee $tmp-kinzoku_nensu_work                        |
+# 勤続年数が1年半未満の社員を取得
+uawk '$7<1.5'                                      |
+#-----------------------------------------------------------------------
+# 月の途中で入社した場合、入社月開始日から入社日までは出勤扱いとする
+#-----------------------------------------------------------------------
+strcat 0 5+\"01\"                                  |
+#  1:社員コード 2:出勤日数 3:入社日付       4:次月 5:入社年月
+#  6:勤務月数   7:勤続年数 8:入社年月開始日
+# 入社月開始日から入社日までの日数を計算
+mdate -f 3 8                                       |
+#  1:社員コード 2:出勤日数 3:入社日付       4:次月             5:入社年月
+#  6:勤務月数   7:勤続年数 8:入社年月開始日 9:入社日付補正日数
+# 補正日数を加算
+lcalc '$0, $2+$9'                                  |
+#  1:社員コード 2:出勤日数 3:入社日付       4:次月             5:入社年月
+#  6:勤務月数   7:勤続年数 8:入社年月開始日 9:入社日付補正日数 10:出勤日数(補正加算)
+# 半年の出勤日数なので、2倍して1年分として計算する
+lcalc '$0, $10*2'                                  |
+#  1:社員コード          2:出勤日数 3:入社日付       4:次月             5:入社年月
+#  6:勤務月数            7:勤続年数 8:入社年月開始日 9:入社日付補正日数 10:出勤日数(補正加算)
+#  11:出勤日数(1年補正)
+self 1 11 7                                        > $tmp-1nenhan_miman
+#  1:社員コード 2:出勤日数(補正加算) 3:勤続年数
+ERROR_CHECK
+
+# 勤続年数が1年半以上の社員を取得
+cat $tmp-kinzoku_nensu_work     |
+#  1:社員コード 2:出勤日数 3:入社日付 4:次月 5:入社年月
+#  6:勤務月数   7:勤続年数
+self 1 2 7                      |
+#  1:社員コード 2:出勤日数 3:勤続年数
+uawk '$3>=1.5'                  |
+tee $tmp-1nenhan_ijo            |
+# 勤続年数が1年半以上、未満のデータをマージ
+upl key=1 - $tmp-1nenhan_miman  > $tmp-shain_shukkin_kinzoku_nensu
+#  1:社員コード 2:出勤日数 3:勤続年数
+ERROR_CHECK
+
+#---------------------------------------------------
+# 年休マスター区分が「1:通常」の処理
+#---------------------------------------------------
+cat $tmp-shain_shukkin_kinzoku_nensu         |
+#  1:社員コード 2:出勤日数 3:勤続年数
+join0 key=1 $tmp-target_nenkyu_master_kbn_1  |
+# 出勤日数8割以上
+uawk '$2>='$nenkan_rodo_nissu_8wari''        |
+joinx - $tmp-nenkyu_master_tsujo             |
+#  1:社員コード 2:出勤日数 3:勤続年数 4:勤続年数(マスター) 5:付与日数
+uawk '$3>=$4'                                |
+getlast key=1                                |
+self 1 5                                     > $tmp-tsujo_fuyo_nissu
+#  1:社員コード 2:付与日数
+ERROR_CHECK
+
+#---------------------------------------------------
+# 年休マスター区分が「2:短時間」の処理
+#---------------------------------------------------
+cat $tmp-shain_shukkin_kinzoku_nensu         |
+#  1:社員コード 2:出勤日数 3:勤続年数
+join0 key=1 $tmp-target_nenkyu_master_kbn_2  |
+joinx - $tmp-nenkyu_master_tanjikan          |
+#  1:社員コード         2:出勤日数 3:勤続年数 4:勤続年数(マスター) 5:年所定労働日数下限
+#  6:年所定労働日数上限 7:付与日数
+uawk '$3>=$4'                                |
+uawk '$2>=$5'                                |
+uawk '$2<=$6'                                |
+getlast key=1                                |
+self 1 7                                     > $tmp-tanjikan_fuyo_nissu
+#  1:社員コード 2:付与日数
+ERROR_CHECK
+
+# 年休マスター区分「1:通常」「2:短時間」それぞれの付与日数をマージ
+upl key=1 $tmp-tsujo_fuyo_nissu $tmp-tanjikan_fuyo_nissu > $tmp-fuyo_nissu
+#  1:社員コード 2:付与日数
+ERROR_CHECK
+
+# 当月分の年休消化を反映したデータ
+cat $tmp-shain_nenkyu_master_nenkyu_shoka  |
+#  1:社員コード       2:年休マスター区分 3:消滅日数 4:繰越日数 5:当年発生日数
+#  6:当年年休消化日数 7:当年年休残日数
+join0 key=1 $tmp-target_shain              |
+tee $tmp-shometsu_kurikoshi_work           |
+# 消滅日数、繰越日数の計算
+uawk '{if($7>=$5){shometsu=$7-$5; kurikoshi=$5}
+else      {shometsu="0"  ; kurikoshi=$7};
+print $0, shometsu, kurikoshi}'     |
+#  1:社員コード       2:年休マスター区分 3:消滅日数   4:繰越日数   5:当年発生日数
+#  6:当年年休消化日数 7:当年年休残日数   8:新消滅日数 9:新繰越日数
+join2 +0 key=1 $tmp-fuyo_nissu             |
+#  1:社員コード   2:付与日数         3:年休マスター区分 4:消滅日数   5:繰越日数
+#  6:当年発生日数 7:当年年休消化日数 8:当年年休残日数   9:新消滅日数 10:新繰越日数
+lcalc '$0, $2+$10'                         |
+#  1:社員コード        2:付与日数         3:年休マスター区分 4:消滅日数   5:繰越日数
+#  6:当年発生日数      7:当年年休消化日数 8:当年年休残日数   9:新消滅日数 10:新繰越日数
+#  11:新当年年休残日数
+strcat 1 3 9 10 2 \"0\" 11                 > $tmp-shain_nenkyu_master_nenkyu_hassei
+#  1:社員コード       2:年休マスター区分 3:消滅日数 4:繰越日数 5:当年発生日数
+#  6:当年年休消化日数 7:当年年休残日数
+ERROR_CHECK
+
+# 年休消化、年休発生のデータをマージ
+# 年休発生処理のデータが優先される
+upl key=1 $tmp-shain_nenkyu_master_nenkyu_shoka $tmp-shain_nenkyu_master_nenkyu_hassei  |
+#  1:社員コード       2:年休マスター区分 3:消滅日数 4:繰越日数 5:当年発生日数
+#  6:当年年休消化日数 7:当年年休残日数
+# 管理項目の付与
+uawk '{print $0, "1", "'$todayhms'", "'$(basename $0)'", "_"}'                          > $tmp-lv1_shain_nenkyu_master
+#  1:社員コード       2:年休マスター区分 3:消滅日数   4:繰越日数 5:当年発生日数
+#  6:当年年休消化日数 7:当年年休残日数   8:更新フラグ 9:更新日時 10:更新ID
+#  11:更新者
+ERROR_CHECK
+
+# L1ディレクトリの作成
+mkdir -p $lv1d/$today/SHAIN_NENKYU_MASTER
+ERROR_CHECK
+
+# L1の更新
+mv $tmp-lv1_shain_nenkyu_master $lv1d/$today/SHAIN_NENKYU_MASTER/SHAIN_NENKYU_MASTER.$today.$todayhms.$$
+ERROR_CHECK
+
+# 正常終了処理
+echo "$HOSTNAME $(basename $0) END $(date +%Y%m%d_%H%M%S)" >> $logd/UPCNT
+touch $semd/$(basename $0).$HOSTNAME.END.$today
+
+rm -rf $tmp-*
+rm -f $logfile
+exit 0
