@@ -1,0 +1,4 @@
+_KEY 伝票種類ID 伝票タイプID 伝票番号 伝票日付 部門ID 倉庫1ID _DELFLAG _EDITUSER _EDITDATE
+1 入庫 1 1 20181204 1 1 _ yakiniku 20181204
+2 入庫 1 2 20181204 1 1 _ yakiniku 20181204
+3 出庫 2 3 20181205 1 1 _ yakiniku 20181205

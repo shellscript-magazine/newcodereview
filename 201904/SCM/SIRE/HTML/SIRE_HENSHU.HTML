@@ -1,0 +1,329 @@
+<!DOCTYPE html> 
+<html>
+	<head>
+		<meta http-equiv="Content-type" content="text/html; charset=UTF-8" />
+		<meta http-equiv="Content-Script-type" content="text/javascript" />
+		<meta http-equiv="Content-Style-type" content="text/css" />
+		<title>仕入伝票編集</title>
+		<style>
+			* {
+				padding: 0;
+				margin: 0;
+				font-size: 12px;
+			}
+			.color_box {
+				background-color: darkred;
+				color: white;
+			}
+
+			td.timespan {
+				width: 41px;
+				border-right: 1px solid black;
+				border-bottom: 1px solid black;
+			}
+			td.shopcell {
+				width: 60px;
+				text-align: left;
+				padding: 5px;
+				border-right: 1px solid black;
+				border-bottom: 2px solid black;
+				border-left: 2px solid black;
+				border-top: 2px solid black;
+			}
+			td.koumoku {
+				width: 41px;
+				padding: 1px;
+				border-right: 1px solid black;
+				border-bottom: 2px solid black;
+				text-align: left;
+			}
+			td.data {
+				border-right: 1px solid black;
+				border-bottom: 1px solid black;
+			}
+			td.databottom {
+				width: 41px;
+				border-right: 1px solid black;
+				border-bottom: 2px solid black;
+			}
+			button {
+				width: 70px;
+			}
+			.info td{
+				padding: 0px 4px;
+				height: 30px;
+			}
+		</style>
+
+		<script>
+			function gotoURL(url){
+				var obj = document.getElementById("INFO");
+				obj.method = "POST";
+				obj.action = url;
+				obj.submit();
+			}
+			function cleanForm(){
+				document.getElementById("PLU").value = "";
+				document.getElementById("DAY").value = "";
+				document.getElementById("CDAYNUM").value = "";
+				document.getElementById("CDAY").value = "YDAY";
+			}
+			function getShohinData( id ){
+				var postCode = document.getElementById("商品コード_" + id).value;
+				var httpRequest = new XMLHttpRequest();
+				httpRequest.open("POST" , "../CGI/GET_SHOHIN.AJAX", false);
+				httpRequest.setRequestHeader("Content-Type","application/x-www-form-urlencoded");
+				httpRequest.send("CODE=" + postCode);
+				var returnValue = httpRequest.responseText.split(" ");
+				if (returnValue) {
+					if(document.getElementById("商品名_" + id).value =="") document.getElementById("商品名_" + id).value = returnValue[0];
+					if(document.getElementById("単位_" + id).value =="") document.getElementById("単位_" + id).value = returnValue[1];
+					if(document.getElementById("入数_" + id).value =="") document.getElementById("入数_" + id).value = returnValue[2];
+					if(document.getElementById("単価_" + id).value =="") document.getElementById("単価_" + id).value = returnValue[3];
+                                } else {
+                                }
+				calc();
+			}
+			function cleanForm(){
+				document.getElementById("PLU").value = "";
+				document.getElementById("DAY").value = "";
+				document.getElementById("CDAYNUM").value = "";
+				document.getElementById("CDAY").value = "YDAY";
+			}
+                        function calc(){
+                          // 金額の計算
+                          var syokei = 0;
+                          var shohizeikei = 0;
+                          var soukei = 0;
+                          var count = 1;
+			  // 明細行数分計算処理を行う
+                          while (document.getElementById("金額_" + count)){
+                            
+                            var tanka = (document.getElementById("単価_" + count).value == "" ? 0 :document.getElementById("単価_" + count).value );
+                            var nebiki = (document.getElementById("値引_" + count).value == "" ? 0 :document.getElementById("値引_" + count).value );
+                       
+
+                            // 数量の計算（箱数x入数）
+                            var hakosu = (document.getElementById("箱数_" + count).value == "" ? 0 :document.getElementById("箱数_" + count).value );
+                            var irisu = (document.getElementById("入数_" + count).value == "" ? 0 :document.getElementById("入数_" + count).value );
+                             
+                            var suryo = 0;
+                            suryo = parseInt(hakosu) * parseInt(irisu);
+                            document.getElementById("数量_" + count).value = suryo;
+                            document.getElementById("数量＿span_" + count).innerText = suryo;
+
+                            // 金額計算
+                            // 単価*数量 - 値引
+                            if (tanka != "0" || suryo != "0" ) {
+                              document.getElementById("金額＿span_" + count).innerText = parseInt(tanka) * parseInt(suryo) - parseInt(nebiki);
+                              document.getElementById("金額_" + count).value = parseInt(tanka) * parseInt(suryo) - parseInt(nebiki);
+                            }
+
+                            var kingaku = (document.getElementById("金額_" + count).value == "" ? 0 :document.getElementById("金額_" + count).value );
+                            syokei = syokei + parseInt(kingaku);
+                            
+                            // 消費税額計算
+                            var syohizeiritu = (document.getElementById("消費税区分_" + count).value == "" ? 0 :document.getElementById("消費税区分_" + count).value );
+                            var syohizeigaku = Math.floor(kingaku * (syohizeiritu / 100));
+                            //document.getElementById("消費税額＿span_" + count).innerText = syohizeigaku;
+                            document.getElementById("消費税額_" + count).value = syohizeigaku;
+                            shohizeikei = shohizeikei + parseInt(syohizeigaku); 
+
+                            // 合計金額計算 (金額＋消費税)
+                            var gokei = parseInt(kingaku) + parseInt(syohizeigaku);
+                            //document.getElementById("合計金額＿span_" + count).innerText = gokei;
+                            document.getElementById("合計金額_" + count).value = gokei;
+                            soukei = soukei + parseInt(gokei);
+                            count++;
+
+                          }
+			  // 小計
+                          document.getElementById("小計_span").innerText = syokei;
+                          document.getElementById("小計").value = syokei;
+                          // 消費税
+                          document.getElementById("消費税額＿span").innerText = shohizeikei;
+                          document.getElementById("消費税額").value = shohizeikei;
+                          // 合計金額
+                          document.getElementById("合計金額＿span").innerText = soukei;
+                          document.getElementById("合計金額").value = soukei;
+                          
+
+                        }
+		</script>
+	</head>
+	<body style="width:1000px;height:600px">
+		<div style="padding:1px;text-align:right">
+			<span></span>
+			&nbsp;
+			<span><a href="../CGI/MENU.CGI">メニューへ</a></span>
+		</div>
+		<div class="color_box" style="width:1000px;height:40px">
+			<div style="width:300px;height:40px;float:left">
+				<img src="" style="height:40px" />
+			</div>
+			<div style="padding:10px">
+				<span style="font-size:20px">仕入伝票編集</span>
+			</div>
+		</div>
+		<div style="clear:both;text-align:right">
+			<div>ログインID: ###LOGIN_ID###</div>
+			<div>現在時刻: ###CURRENT_TIME###</div>
+		</div>
+		<div style="border-bottom:1px solid darkred;margin-bottom:5px">
+			<span class="color_box" style="font-size:18px">&ensp;</span>
+			<span style="font-size:18px">&nbsp;仕入伝票</span>
+		</div>
+		<form id="INFO" >
+<!-- DENPYO_DATA -->
+		<div>
+			<table class="info" style="float:left;margin:10px" cellspacing="0">
+				<tr>
+					<td class="color_box" style="width:60px;height:30px">伝票番号</td>
+					<td style="width:200px;border:1px dotted black">
+                                         <span id="伝票番号" name="伝票番号" >%1</span>
+                                         <input type="hidden" id="伝票番号＿hidden" name="伝票番号＿hidden" value="%1" />
+                                        </td>
+					<td class="color_box" style="width:60px">伝票種類</td>
+					<td style="width:80px;border:1px dotted black;text-align:left">
+						<select id="伝票種類" name="伝票種類" >
+<!-- DENPYO_SYURUI -->
+							<option value="%1">%2</option>
+<!-- DENPYO_SYURUI -->
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td class="color_box" style="height:30px">伝票日付</td>
+					<td style="border:1px dotted black"><input type="text" id="伝票日付" name="伝票日付" /></td>
+					<td class="color_box">取引先</td>
+                                        <td style="border:1px dotted black;width:200px">                 
+                                                <select name="取引先" id="取引先">                       
+                                                        <option style="width:12em" value="-">-</option>  
+<!-- SIRESAKI_LIST -->                                                                                   
+                                                        <option style="width:12em" value="%1">%2</option>
+<!-- SIRESAKI_LIST -->                                                                                   
+                                                </select>                                                
+                                        </td>                      
+					<td class="color_box">発注日</td>
+					<td style="border:1px dotted black;text-align:right"><input type="text" id="発注日" name="発注日" /></td>
+				</tr>
+				<tr>
+					<td rowspan=2 class="color_box" style="width:60px">支払</td>
+					<td class="color_box" style="width:60px">支払先</td>
+					<td style="width:200px;border:1px dotted black"><input type="text" id="支払先" name="支払先"/></td>
+					<td class="color_box" style="width:60px">支払予定日</td>
+					<td style="width:200px;border:1px dotted black"><input type="text" id="支払予定日" name="支払予定日"/></td>
+				</tr>
+				<tr>
+					<td class="color_box" style="width:60px">先方担当者</td>
+					<td style="width:200px;border:1px dotted black"><input type="text" id="先方担当者" name="先方担当者" /></td>
+				</tr>
+				<tr>
+					<td class="color_box" style="width:60px">摘要</td>
+					<td colspan="4" style="width:200px;border:1px dotted black"><input style="width:500px" type="text" id="摘要" name="摘要"/></td>
+				</tr>
+				<tr>
+					<td class="color_box" style="width:60px">顛末</td>
+					<td colspan="4" style="width:200px;border:1px dotted black"><input style="width:500px" type="text" id="顛末" name="顛末"/></td>
+				</tr>
+			</table>
+		</div>
+		<table cellspacing="0" style="clear:both;text-align:center;padding-left:10px;clear:both">
+			<tbody>
+				<tr>
+					<th class="color_box" style="width: 60px;border:1px solid black" >商品コード</th>
+					<th class="color_box" style="width: 203px;border:1px solid black" >商品名</th>
+					<th class="color_box" style="width: 61px;border:1px solid black"  >入数</th>
+					<th class="color_box" style="width: 61px;border:1px solid black"  >箱数</th>
+					<th class="color_box" style="width: 58px;border:1px solid black"  >数量</th>
+					<th class="color_box" style="width: 61px;border:1px solid black"  >単位</th>
+					<th class="color_box" style="width: 52px;border:1px solid black" >単価</th>
+					<th class="color_box" style="width: 81px;border:1px solid black"  >値引</th>
+					<th class="color_box" style="width: 78px;border:1px solid black" >消費税区分</th>
+					<th class="color_box" style="width: 115px;border:1px solid black" >金額</th>
+					<th class="color_box" style="width: 118px;border:1px solid black" >備考</th>
+				</tr>
+                        </tbody>
+                </table>
+<div style="overflow:auto;height:300px;">
+		<table cellspacing="0" style="clear:both;text-align:center;padding-left:10px;clear:both">
+			<tbody>
+<!-- MEISAI_DATA -->
+				<tr>
+					<td class="data" ><input type="text" id="商品コード_%1" name="商品コード_%1" style="width:58px" onchange="getShohinData(%1);" value="%2"/></td>
+					<td class="data" ><input type="text" id="商品名_%1" name="商品名_%1" style="width:200px" value="%3"/></td>
+					<td class="data" ><input type="text" id="入数_%1" name="入数_%1" style="width:58px; text-align:right;" value="%4" onchange="calc();"/></td>
+					<td class="data" ><input type="text" id="箱数_%1" name="箱数_%1" style="width:58px; text-align:right;" value="%5" onchange="calc();"/></td>
+					<td class="data" style="width:58px;text-align:right;" ><span id="数量＿span_%1" name="数量＿span_%1" style="text-align:right;">%6</span><input type="hidden" id="数量_%1" name="数量_%1" value="%6"/></td>
+					<td class="data" ><input type="text" id="単位_%1" name="単位_%1" style="width:58px;" value="%7"/></td>
+					<td class="data" ><input type="text" id="単価_%1" name="単価_%1" style="width:50px; text-align:right;" onchange="calc();" value="%8"/></td>
+					<td class="data" ><input type="text" id="値引_%1" name="値引_%1" style="width:78px; text-align:right;" onchange="calc();" value="%9"/></td>
+					<td class="data" >
+						<select id="消費税区分_%1" name="消費税区分_%1"  onchange="calc();" style="width:78px;" >
+<!-- SHOHIZEI_LABEL -->
+							<option value="%1" %3 >%2</option>
+<!-- SHOHIZEI_LABEL -->
+						</select>
+                                        </td>
+					<td class="data" style="width:116px;text-align:right;" >
+						<span id="金額＿span_%1" name="金額＿span_%1" style="width:116px;">%10</span>
+						<input type="hidden" id="金額_%1" name="金額_%1" value="%10" />
+						<input type="hidden" id="消費税額_%1" name="消費税額_%1" value="%12"/>
+						<input type="hidden" id="合計金額_%1" name="合計金額_%1" value="%13"/>
+					</td>
+					<td class="data" ><input type="text" id="備考_%1" name="備考_%1" style="width:116px" value="%14"/></td>
+				</tr>
+<!-- MEISAI_DATA -->
+			</tbody>
+		</table>
+</div>
+		<div>
+			<table class="info" style="float:left;margin:10px" cellspacing="0">
+				<tr>
+					<td class="color_box" style="width:60px;height:30px">小計</td>
+					<td style="width:200px;border:1px dotted black; text-align:right;">
+						<span id="小計_span" name="小計_span" style="text-align:right;">%2</span>
+						<input type="hidden" id="小計" name="小計" value="%2"/>
+					</td>
+					<td class="color_box" style="width:60px">消費税額</td>
+					<td style="width:200px;border:1px dotted black;text-align:right;">
+						<span id="消費税額＿span" name="消費税額＿span">%3</span>
+						<input type="hidden" id="消費税額" name="消費税額" value="%3"/>
+					</td>
+					<td class="color_box" style="width:60px">合計金額</td>
+					<td style="width:200px;border:1px dotted black;text-align:right;">
+						<span id="合計金額＿span" name="合計金額＿span">%4</span>
+						<input type="hidden" id="合計金額" name="合計金額" value="%4"/>
+					</td>
+				</tr>
+<!--
+				<tr>
+					<td rowspan=2 class="color_box" style="width:60px">支払</td>
+					<td class="color_box" style="width:60px">支払先</td>
+					<td style="width:200px;border:1px dotted black"><input type="text" id="支払先" name="支払先"/></td>
+					<td class="color_box" style="width:60px">支払予定日</td>
+					<td style="width:200px;border:1px dotted black"><input type="text" id="支払予定日" name="支払予定日"/></td>
+				</tr>
+				<tr>
+					<td class="color_box" style="width:60px">先方担当者</td>
+					<td style="width:200px;border:1px dotted black"><input type="text" id="先方担当者" name="先方担当者" /></td>
+				</tr>
+				<tr>
+					<td class="color_box" style="width:60px">摘要</td>
+					<td colspan="4" style="width:200px;border:1px dotted black"><input style="width:500px" type="text" id="摘要" name="摘要"/></td>
+				</tr>
+				<tr>
+					<td class="color_box" style="width:60px">顛末</td>
+					<td colspan="4" style="width:200px;border:1px dotted black"><input style="width:500px" type="text" id="顛末" name="顛末"/></td>
+				</tr>
+-->
+			</table>
+		</div>
+<!-- DENPYO_DATA -->
+		</form>
+		<div style="margin:10px">
+			<input type="button" value="更新" onclick="gotoURL('../CGI/SIRE_HENSHU_TOROKU.CGI')" />
+			<input type="button" value="一覧へ戻る" onclick="window.location.href='../CGI/SIRE_SHOKAI.CGI'" />
+		</div>
+	</body>
+</html>

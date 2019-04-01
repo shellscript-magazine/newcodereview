@@ -1,0 +1,123 @@
+#!/bin/bash -vx
+#
+# GET_SHOHIN.AJAX 
+#
+# 商品マスタ取得 
+#
+# K.Bando ()
+# 2018/12/18
+####################################################################
+
+####################################################################
+# ログ設定
+####################################################################
+logfile=/home/$(whoami)/LOG/LOG.$(basename $0).$(date +%Y%m%d_%H%M%S).$$
+exec 2> $logfile
+
+
+####################################################################
+# 環境変数設定 
+####################################################################
+PATH=/home/UTL:/home/TOOL:$PATH
+LANG=ja_JP.UTF-8
+
+
+####################################################################
+# エラーチェックと終了処理の定義 
+####################################################################
+# 一時ファイル
+tmp=/tmp/tmp_$(basename $0)_$(date +%Y%m%d_%H%M%S)_$$
+todayhms=$(date +%Y%m%d%H%M%S)
+curtime="$(dayslash -d $todayhms --output 'yyyy年 mm月 dd日 HH:MM:SS')"
+
+# POSTデータ受け取り
+if [ ! -z "$CONTENT_LENGTH" ] ; then
+	dd bs=$CONTENT_LENGTH |
+	cgi-name -n_ -s_      >$tmp-name
+else
+	:>$tmp-name
+fi
+
+
+# エラーチェック 
+ERROR_CHECK(){
+	[ $(plus ${PIPESTATUS[@]}) -eq 0 ] && return
+	rm -f $tmp-*
+	echo "Content-type: text/html; charset=utf-8"
+	echo "" 
+	echo "システムエラー"
+	exit 1
+}
+
+# ディレクトリ定義
+# homeディレクトリ  
+homd=/home/$(whoami)
+ERROR_CHECK
+# アプリケーションディレクトリ
+apld=$homd/SCM/SIRE
+ERROR_CHECK
+# HTMLディレクトリ
+htmd=$apld/HTML
+ERROR_CHECK
+# INPUTディレクトリ
+inpd=$apld/INPUT
+ERROR_CHECK
+# POMPAディレクトリ
+pomd=$apld/POMPA
+ERROR_CHECK
+# LV3ディレクトリ
+lv3d=$homd/SCM/LV3
+ERROR_CHECK
+
+
+
+####################################################################
+# ログインチェック
+####################################################################
+
+# 省略
+loginid=""
+loginname=""
+companycode=""
+
+
+
+
+####################################################################
+# メイン処理 
+####################################################################
+
+
+#パラメータの商品コード取得
+code=$(nameread CODE $tmp-name)
+ERROR_CHECK
+
+# 商品マスタ取得
+cat $lv3d/SYOUHIN/SYOUHIN                    | 
+tagcond '%商品ID == "'$code'"'               |
+tagself 商品名 単位 入数 標準価格            |
+tail -n +2                                   > $tmp-shohin
+ERROR_CHECK
+
+if [ ! -s $tmp-shohin ] ; then
+	echo "_" |
+	fpad _ 4 >$tmp-shohin
+fi 
+
+
+####################################################################
+# 出力処理 
+####################################################################
+echo "Content-Type: text/html; charset=utf-8"
+ERROR_CHECK
+echo ""
+ERROR_CHECK
+cat $tmp-shohin
+ERROR_CHECK
+
+####################################################################
+# 終了処理 
+####################################################################
+rm -f $tmp-*
+ERROR_CHECK
+exit 0
