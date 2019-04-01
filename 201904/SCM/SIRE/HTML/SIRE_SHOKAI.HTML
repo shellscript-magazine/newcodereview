@@ -1,0 +1,228 @@
+<!DOCTYPE html> 
+<html>
+	<head>
+		<meta http-equiv="Content-type" content="text/html; charset=UTF-8" />
+		<meta http-equiv="Content-Script-type" content="text/javascript" />
+		<meta http-equiv="Content-Style-type" content="text/css" />
+		<title>仕入伝票照会</title>
+		<style>
+			* {
+				padding: 0;
+				margin: 0;
+				font-size: 12px;
+			}
+			.color_box {
+				background-color: darkred;
+				color: white;
+			}
+
+			td.timespan {
+				width: 41px;
+				border-right: 1px solid black;
+				border-bottom: 1px solid black;
+			}
+			td.shopcell {
+				width: 60px;
+				text-align: left;
+				padding: 5px;
+				border-right: 1px solid black;
+				border-bottom: 2px solid black;
+				border-left: 2px solid black;
+				border-top: 2px solid black;
+			}
+			td.koumoku {
+				width: 41px;
+				padding: 1px;
+				border-right: 1px solid black;
+				border-bottom: 2px solid black;
+				text-align: left;
+			}
+			td.data {
+				width: 41px;
+				border-right: 1px solid black;
+				border-left: 1px solid black;
+				border-bottom: 1px solid black;
+			}
+			td.databottom {
+				width: 41px;
+				border-right: 1px solid black;
+				border-bottom: 2px solid black;
+			}
+			button {
+				width: 70px;
+			}
+			.info td{
+				padding: 0px 4px;
+				height: 30px;
+			}
+		</style>
+
+		<script>
+			function gotoURL(url){
+				var obj = document.getElementById("INFO");
+				obj.method = "POST";
+				obj.action = url;
+				obj.submit();
+			}
+			function getData(){
+				gotoURL("../CGI/SIRE_SHOKAI_KENSAKU.CGI");
+			}
+			function cleanForm(){
+				document.getElementById("日付").value = "";
+				document.getElementById("伝票種類").value = "";
+				document.getElementById("伝票番号").value = "";
+				document.getElementById("取引先").value = "";
+				document.getElementById("フリーワード").value = "";
+			}
+                        function showHenshu(){
+				var obj = document.getElementById("MEISAI");
+				obj.method = "POST";
+				obj.action = "../CGI/SIRE_HENSHU.CGI";
+				obj.submit();
+                        }
+                        function fukuseitoroku(){
+				var obj = document.getElementById("MEISAI");
+				obj.method = "POST";
+				obj.action = "../CGI/FUKUSEI_TOROKU.CGI";
+				obj.submit();
+                        }
+                        function akadenhakko(){
+                                var list = document.getElementsByName("選択伝票番号");
+                                for (i = 0; i < list.length ; i++ ) {
+                                   if (list[i].checked == true) {
+                                     var denno = list[i].value;
+                                     break;
+                                   }
+                                }
+                                if (!confirm("伝票番号「" + denno + "」の赤伝を発行してよろしいですか？")) return;
+				var obj = document.getElementById("MEISAI");
+				obj.method = "POST";
+				obj.action = "../CGI/AKADEN_HAKKO.CGI";
+				obj.submit();
+                        }
+        function cleanButton() {
+             document.getElementById("修正").disabled     = "disabled";
+             document.getElementById("複製登録").disabled = "disabled";
+        }
+        function enableButton() {
+             document.getElementById("修正").disabled     = "";
+             document.getElementById("複製登録").disabled = "";
+        }
+        function CheckRadio(Rdo) {
+             if (Rdo.checked == true) {
+                 enableButton()
+             }
+        }
+		</script>
+	</head>
+	<body style="width:1000px;height:600px" onload="cleanButton()" >
+		<div style="padding:1px;text-align:right">
+			<span></span>
+			&nbsp;
+			<span><a href="../CGI/MENU.CGI">メニューへ</a></span>
+		</div>
+		<div class="color_box" style="width:1000px;height:40px">
+			<div style="width:300px;height:40px;float:left">
+				<img src="" style="height:40px" />
+			</div>
+			<div style="padding:10px">
+				<span style="font-size:20px">仕入伝票照会</span>
+			</div>
+		</div>
+		<div style="clear:both;text-align:right">
+			<div>ログインID: ###LOGIN_ID###</div>
+			<div>現在時刻: ###CURRENT_TIME###</div>
+		</div>
+		<div style="border-bottom:1px solid darkred;margin-bottom:5px">
+			<span class="color_box" style="font-size:18px">&ensp;</span>
+			<span style="font-size:18px">&nbsp;検索</span>
+		</div>
+		 <div>
+			<form id="INFO" style="padding:10px">
+				<table class="info" style="float:none;mergin:10px" cellspacing="0">
+					<tr>
+						<td style="width:250px;border:1px dotted black">
+							日付:
+							<input type="text" name="日付" id="日付" />
+						</td>
+						<td style="width:250px;border:1px dotted black">
+							伝票種類:
+							<select  name="伝票種類" id="伝票種類" >
+                                                          <option value="_"></option>
+<!-- DENPYO_SYURUI -->
+                                                          <option value="%1">%2</option>
+<!-- DENPYO_SYURUI -->
+                                                        </select>
+						</td>
+						<td style="width:250px;border:1px dotted black">
+							伝票番号:
+							<input type="text" name="伝票番号" id="伝票番号" />
+						</td>
+					</tr>
+					<tr>
+                                        <td style="width:40px;border:1px dotted black;text-align:left">
+						取引先
+                                                <select id="取引先" name="取引先" >
+                                                        <option value="_"></option>
+<!-- SIRESAKI_LIST -->
+                                                        <option value="%1">%2</option>
+<!-- SIRESAKI_LIST -->
+                                                </select>
+                                        </td>
+<!--
+						<td style="width:250px;border:1px dotted black">
+							取引先:
+							<input type="text" name="取引先" id="取引先" />
+						</td>
+-->
+						<td style="width:250px;border:1px dotted black">
+							フリーワード:
+							<input type="text" name="フリーワード" id="フリーワード" />
+						</td>
+					</tr>
+					<tr>
+						<td style="border:1px dotted black">
+							<button onclick="getData()">検索</button>
+							<!-- <button type="button" onclick="cleanForm()">リセット</button> -->
+							<button type="button" onclick="window.location.href='../CGI/SIRE_SHOKAI.CGI';">リセット</button>
+						</td>
+					</tr>
+				</table>
+			</form>
+		</div>
+		<div style="margin:10px">
+			<input type="button" id="新規登録" value="新規登録" onclick="window.location.href='../CGI/SIRE_TOROKU.CGI';" >
+			<input type="button" id="修正"     value="修正"     onclick="showHenshu();" >
+			<input type="button" id="赤伝発行" value="赤伝発行" onclick="akadenhakko();" disabled />
+			<input type="button" id="複製登録" value="複製登録" onclick="fukuseitoroku();" >
+		</div>
+		<div style="border-bottom:1px solid darkred;margin-bottom:5px">
+			<span class="color_box" style="font-size:18px">&ensp;</span>
+			<span style="font-size:18px">&nbsp;検索結果</span>
+		</div>
+                <form id="MEISAI" name="MEISAI" >
+		<table cellspacing="0" style="clear:both;text-align:center;margin:10px;clear:both">
+			<tr>
+				<td class="color_box" style="width:40px;border:1px solid black">選択</td>
+				<td class="color_box" style="width:60px;border:1px solid black">伝票種類</td>
+				<td class="color_box" style="width:60px;border:1px solid black">伝票番号</td>
+				<td class="color_box" style="width:60px;border:1px solid black">伝票日付</td>
+				<td class="color_box" style="width:100px;border:1px solid black">取引先</td>
+				<td class="color_box" style="width:70px;border:1px solid black">合計金額</td>
+			</tr>
+<!-- SIRE_RECORDS -->
+			<tr>
+				<td class="data">
+					<input type="radio" id="選択伝票番号_%1" name="選択伝票番号" value="%3" onclick="CheckRadio(this)" />
+				</td>
+				<td class="data"><span id="伝票種類_%1" name="伝票種類_%1">%2</span></td>
+				<td class="data"><span id="伝票番号_%1" name="伝票番号_%1">%3</span></td>
+				<td class="data"><span id="伝票日付_%1" name="伝票日付_%1">%4</span></td>
+				<td class="data"><span id="取引先_%1" name="取引先_%1">%5</span></td>
+				<td class="data" style="align:right;"><span id="合計金額_%1" name="合計金額" >%6</span></td>
+			</tr>
+<!-- SIRE_RECORDS -->
+		</table>
+                </form>
+	</body>
+</html>

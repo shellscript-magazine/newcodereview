@@ -1,0 +1,109 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+                      "http://www/w3.org/TR/html4/loose.dtd">
+<html>
+	<head>
+		<meta http-equiv="Content-type" content="text/html; charset=UTF-8" />
+		<meta http-equiv="Content-Script-type" content="text/javascript" />
+		<meta http-equiv="Content-Style-type" content="text/css" />
+		<title>仕入伝票登録完了</title>
+		<style>
+			* {
+				padding: 0;
+				margin: 0;
+				font-size: 12px;
+			}
+			.color_box {
+				background-color: darkred;
+				color: white;
+			}
+
+			td.timespan {
+				width: 41px;
+				border-right: 1px solid black;
+				border-bottom: 1px solid black;
+			}
+			td.shopcell {
+				width: 60px;
+				text-align: left;
+				padding: 5px;
+				border-right: 1px solid black;
+				border-bottom: 2px solid black;
+				border-left: 2px solid black;
+				border-top: 2px solid black;
+			}
+			td.koumoku {
+				width: 41px;
+				padding: 1px;
+				border-right: 1px solid black;
+				border-bottom: 2px solid black;
+				text-align: left;
+			}
+			td.data {
+				width: 41px;
+				border-right: 1px solid black;
+				border-bottom: 1px solid black;
+			}
+			td.databottom {
+				width: 41px;
+				border-right: 1px solid black;
+				border-bottom: 2px solid black;
+			}
+			button {
+				width: 70px;
+			}
+			.info td{
+				padding: 0px 4px;
+				height: 30px;
+			}
+		</style>
+
+		<script>
+			function gotoURL(url){
+				var obj = document.getElementById("INFO");
+				obj.method = "POST";
+				obj.action = url;
+				obj.submit();
+			}
+			function getData(){
+				gotoURL("./JIKANTAI.CGI");
+			}
+			function cleanForm(){
+				document.getElementById("PLU").value = "";
+				document.getElementById("DAY").value = "";
+				document.getElementById("CDAYNUM").value = "";
+				document.getElementById("CDAY").value = "YDAY";
+			}
+		</script>
+	</head>
+	<body style="width:1000px;height:600px">
+		<div style="padding:1px;text-align:right">
+			<span></span>
+			&nbsp;
+			<span><a href="../CGI/MENU.CGI">メニューへ</a></span>
+		</div>
+		<div class="color_box" style="width:1000px;height:40px">
+			<div style="width:300px;height:40px;float:left">
+				<img src="" style="height:40px" />
+			</div>
+			<div style="padding:10px">
+				<span style="font-size:20px">仕入伝票登録完了</span>
+			</div>
+		</div>
+		<div style="clear:both;text-align:right">
+			<div>ログインID: ###LOGIN_ID###</div>
+			<div>現在時刻: ###CURRENT_TIME###</div>
+		</div>
+		<div style="border-bottom:1px solid darkred;margin-bottom:5px">
+			<span class="color_box" style="font-size:18px">&ensp;</span>
+			<span style="font-size:18px">&nbsp;</span>
+		</div>
+		<form id="" >
+		<div>
+                   <span>伝票番号「###DEN_NO###」で登録が完了しました。</span>
+		</div>
+		<div style="margin:10px">
+			<input type="button" value="一覧に戻る" onclick="window.location.href='../CGI/SIRE_SHOKAI.CGI';" />
+			<input type="button" value="メニューに戻る" onclick="window.location.href='../CGI/MENU.CGI';" />
+		</div>
+	</body>
+</html>
