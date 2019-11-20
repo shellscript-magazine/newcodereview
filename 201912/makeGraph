@@ -1,0 +1,128 @@
+#!/bin/bash
+#
+# Graphvizを使った設計図面作成コマンド
+#   シェルスクリプトを引数に渡すとブロックコメントを読み取って
+#   グラフィカルな設計図を作成します。
+#   ブロックコメントの記法は以下の通りです。
+#     ・ブロックコメントは #| から始める
+#     ・ブロックコメントは input, output, outline の３種類のみ
+#     ・そのブロックの入力要素をinput, 出力要素をoutputとして記述する
+#     ・input, outputはいずれも複数存在して構わない
+#     ・ブロックの概要をoutlineとして記述する
+#     ・各ブロックのoutputはどこかのブロックのinputに対応するはずなので、後ろに続く名前は必ず一致させる
+#     　（ただし最初のinputと最後のoutputは例外）
+#
+# makeGraphが読み込むブロックコメントの具体例：
+# -------------------------------------------------
+# ######################################
+# #| input:      [原価マスタ]    PRICE
+# #| output:     [原価マスタ修正] $tmp-price
+# #| outline:    原価マスタから必要な部分だけ抜き出す
+# ######################################
+# ....
+# 
+# ######################################
+# #| input:      [部門マスタ]    CATEGORY
+# #| output:     [部門マスタ修正] $tmp-category
+# #| outline:    部門マスタから必要な部分だけ抜き出す
+# ######################################
+# ....
+# 
+# ######################################
+# #| input:      [原価マスタ修正] $tmp-price
+# #| input:      [部門マスタ修正] $tmp-category
+# #| output:     [出力]        $tmp-out
+# #| outline:    粗利計算をする
+# ######################################
+# ....
+# -------------------------------------------------
+# 
+# 動作の前提条件：Graphvizのインストール
+# 　　　　　　　：uspTukubaiのインストール
+# 　　　　　　　　（使用コマンド：delf, yarr, tarr, cjoin0）
+#
+# [Usage] makeGraph <file>
+#
+# written by Ken.Okada(okadaken@gmail.com) : 2014/5/26
+
+if [ $# -ne 1 ]; then
+	echo "[usage] $(basename $0) <file>"
+	exit 1
+fi
+
+tmp=/tmp/tmp_$$
+file=$1
+
+cat $file       |
+grep "#|"       |
+delf 1          |
+tr -d "$"       |
+tr "-" "_"      |
+sed 's/(/（/g'  |
+sed 's/)/）/g'  |
+awk '$1~":.*"'  |
+self 1/2        |
+yarr num=1      | 
+awk '$1~/outline/{ gsub(/ /,"",$0); gsub(/:/,": ",$0); print }$1!~/outline/' |
+sed 's/\[/［/g' |
+sed 's/\]/］/g' |
+awk 'BEGIN{ count="1"; } \
+	{ if( $1~/outline:/ ){ \
+		print "outline: ID："count"　"$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20; count++; \
+	  }else{ \
+		print; \
+	  } \
+	} ' |
+cat         > $tmp-data
+
+awk '$1=="outline:"' $tmp-data    |
+delf 1                            |
+xargs -I@ echo @ "[ shape=box ];" > $tmp-process
+
+awk '$1=="input:"||$1=="output:"' $tmp-data |
+delf 1                                      |
+tarr                                        |
+LANG=C sort                                 |
+uniq                                        |
+xargs -I@ echo @ "[ shape = ellipse, style = bold];" > $tmp-model
+
+cat $tmp-data     |
+delf 1            |
+sed 's/ /-----/g' |
+yarr -3           |
+while read in out process; do
+	
+	echo $in          |
+	sed 's/-----/ /g' |
+	tarr              |
+	while read i; do
+		echo $i "->" $process "[color = blue, style = bold, arrowsize = 1]"
+	done
+
+	echo $out         |
+	sed 's/-----/ /g' |
+	tarr              |
+	while read o; do
+		echo $process "->" $o "[color = red, style = bold, arrowsize = 1]"
+	done
+done > $tmp-yajirusi
+
+cjoin0 +ng3 key=1 <(self 3 $tmp-yajirusi | msort key=1/NF ) $tmp-model >$tmp-slave 3>$tmp-master
+awk '{print $1,"[shape = ellipse, peripheries = 2]"}' $tmp-master |
+cat - $tmp-slave                                                  > $tmp-model
+
+cat << FIN > $tmp-dot
+digraph sample {
+graph[ layout=dot ];
+node[fontname="IPAゴシック"];
+$(cat $tmp-process)
+$(cat $tmp-model)
+$(cat $tmp-yajirusi)
+}
+FIN
+
+dot -Tpng $tmp-dot -o $1.png
+cp $tmp-dot $1.dot
+
+rm -f $tmp-*
+exit 0
